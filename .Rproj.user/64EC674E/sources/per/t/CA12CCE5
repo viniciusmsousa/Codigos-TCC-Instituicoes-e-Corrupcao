@@ -1,0 +1,27 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1555086961763.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "106|23|115|0|\n116|19|129|0|\n",
+    "hash" : "3302583962",
+    "id" : "CA12CCE5",
+    "lastKnownWriteTime" : 1555349488,
+    "last_content_update" : 1555349488679,
+    "path" : "~/Economia/TCC/TCC - Vinicius M Sousa - Fronteira Estocástica/modelo_e_graficos.R",
+    "project_path" : "modelo_e_graficos.R",
+    "properties" : {
+        "cursorPosition" : "143,0",
+        "docOutlineSize" : "185.52539559624222",
+        "docOutlineVisible" : "1",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

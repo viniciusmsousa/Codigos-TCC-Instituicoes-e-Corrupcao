@@ -1,0 +1,264 @@
+# Pacotes e Dados ---------------------------------------------------------
+
+
+list.of.packages <- c("dplyr","tidyr","ggplot2","ggrepel","ggExtra",
+                      "fmsb","plm","frontier","corrplot")
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) install.packages(new.packages)
+lapply(list.of.packages,function(x){library(x,character.only=TRUE)})
+
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggrepel)
+library(ggExtra)
+library(fmsb)
+library(plm)
+library(frontier)
+library(corrplot)
+
+dados_tcc <- read.csv("Dados/dados_tcc.csv") %>% 
+  as_tibble() %>% 
+  mutate(Ano = as.factor(Ano))
+
+
+# Estimando Fronteira -----------------------------------------------------
+
+dados_fronteira <- plm::pdata.frame(dados_tcc,
+                                 c("sigla","Ano"))
+
+# Error Components Frontier (Battese & Coelli 1992)
+# with time-variant efficiencies
+frontier_model <- frontier::sfa(log(ipc) ~ log(politico) + log(regulatorio) + log(negocio) + 
+                        log(imprensa)+log(idh)+log(sof_mercado)+log(sof_negocio),
+                      timeEffect = TRUE,
+                      truncNorm = T,
+                      data = dados_fronteira)
+sumario_fronteira <- summary(frontier_model)
+sumario_fronteira
+# pegando as eficiencias tecnicas
+paises <- summary(frontier_model,
+                  effic = T)$effic %>% 
+  rownames()
+efic_tecnica <- summary(frontier_model)$effic %>% 
+  as_tibble() %>% 
+  mutate(sigla = paises) %>% 
+  gather(key = "Ano",
+         value = "ET",
+         -c(sigla))
+rm(paises)
+gc()
+
+# juntando Eficiencia técnica no dados_tcc
+dados_tcc %>% 
+  full_join(efic_tecnica,
+            by = c("Ano", "sigla")) -> dados_tcc
+
+# Grafico de radar --------------------------------------------------------
+
+dados_tcc %>%
+  group_by(Pais) %>%
+  summarise(ipc = mean(ipc),
+            politico = mean(politico),
+            regulatorio = mean(regulatorio),
+            negocio = mean(negocio),
+            imprensa = mean(imprensa),
+            idh = mean(idh)*100,
+            sof_mer = mean(sof_mercado),
+            sof_neg = mean(sof_negocio)) %>%
+  arrange(desc(ipc)) %>%
+  as.matrix() -> radar
+
+dados_tcc %>%
+  filter(Pais=="Brazil") %>%
+  summarise(ipc = mean(ipc),
+            politico = mean(politico),
+            regulatorio = mean(regulatorio),
+            negocio = mean(negocio),
+            imprensa = mean(imprensa),
+            idh = mean(idh)*100,
+            sof_mer = mean(sof_mercado),
+            sof_neg = mean(sof_negocio)) %>%
+  as.matrix()-> br
+rownames(br) <- c("Brazil")
+nomes <- radar[,1]
+radar <- apply(X = radar[,-1], FUN = as.numeric,2)
+rownames(radar) <- nomes
+nomes_top_10 <- nomes[1:10]
+nomes_bottom_10 <- nomes[92:102]
+top_10 <- colMeans(radar[1:10,])
+bottom_10 <- colMeans(radar[92:102,])
+max_min <- matrix(c(rep(100,8),
+                    rep(0,8)),
+                  byrow = T,ncol = 8)
+colnames(max_min) <- colnames(radar)
+rownames(max_min) <- c("max","min")
+radar <- data.frame(rbind(max_min,top_10,br ,bottom_10))
+
+
+
+colors_border=c( rgb(0.2,0.5,0.5,0.9), rgb(0.8,0.2,0.5,0.9) , rgb(0.7,0.5,0.1,0.9) )
+colors_in=c( rgb(0.2,0.5,0.5,0.4), rgb(0.8,0.2,0.5,0.4) , rgb(0.7,0.5,0.1,0.4) )
+radarchart( radar, axistype=1 ,
+            #custom polygon
+            pcol=colors_border , pfcol=colors_in , plwd=4 , plty=1,
+            #custom the grid
+            cglcol="grey", cglty=1, axislabcol="grey", caxislabels=seq(0,20,5), cglwd=0.8,
+            #custom labels
+            vlcex=0.8
+)
+legend(x=0.7, y=1, legend = rownames(radar[-c(1,2),]), bty = "n", pch=20 , col=colors_in , text.col = "grey", cex=1.2, pt.cex=3)
+
+
+
+# Matriz de correlacao ----------------------------------------------------
+
+
+corrplot::corrplot(corr = cor(as.matrix(dados_tcc[,4:11])),
+         method = "ellipse",
+         diag = T,
+         type = "lower")
+
+
+
+# Box plot por ano --------------------------------------------------------
+
+dados_tcc %>% 
+  gather(key = "Variável",
+         "Score",
+         -c(sigla, Pais, Ano, idh)) %>% 
+  ggplot(aes(x=`Variável`,y=Score, color = Ano))+
+  geom_boxplot()+
+  theme_classic()+
+  xlab(" ")
+
+
+
+
+# 2d density plot ---------------------------------------------------------
+
+high <- "#1e441e"
+low <- "#559155"
+ggplot(dados_tcc, aes(x=ipc, y=ET)) +
+  geom_hex() + # precisa do pacote "hexbin instalado
+  theme_classic()+
+  xlab("Índice de Percepção de Corrupção") +
+  ylab("Eficiência Técnica") +
+  scale_x_continuous(breaks = seq(from = 0, to = 100, by =10)) +
+  scale_y_continuous(breaks = seq(from = 0, to = 1, by = 0.1)) +
+  scale_fill_gradient(low = low,high = high)
+
+plot1
+ggMarginal(plot1,type = "histogram",
+           size = 2.5,
+           color = "black",
+           fill = "lightblue") -> plot1
+plot1
+
+
+# Scatter Plot ------------------------------------------------------------
+
+# tem que colocar o nome do brasil certiho no grafico
+
+dados_tcc %>% 
+  select(Pais, Ano,ET, ipc, politico, regulatorio, negocio,idh) %>% 
+  group_by(Pais) %>% 
+  summarise(med_et = mean(ET),
+            med_ipc = mean(ipc),
+            med_politico = mean(politico),
+            med_regulatorio = mean(regulatorio),
+            med_negocio = mean(negocio),
+            med_idh = mean(idh)) %>% 
+  arrange(desc(med_et)) %>% 
+  mutate(rank_id = row_number()) -> rank
+
+top_10_fronteira <- unlist(rank[c(1:10),1])
+bottom_10_fronteira <- unlist(rank[c(93:102),1])
+
+#obs: nomes_top_10 e bottom vem do grafico de radar
+rank %>% 
+  mutate(Grupo = if_else(condition = Pais %in% top_10_fronteira,
+                         true = "Top_Fron",
+                         false = if_else(condition = Pais %in% bottom_10_fronteira,
+                                         true = "Bottom_Fron",
+                                         false = if_else(condition = Pais %in% nomes_top_10, 
+                                                         true = "Top_Ipc",
+                                                         false = if_else(Pais %in% nomes_bottom_10,
+                                                                         true = "Bottom_Ipc",
+                                                                         false = "outros")))),
+         Grupo = as.factor(Grupo)) %>%
+  rename(`Índice de percepção de Corrupção` = med_ipc,
+         `Ambiente Politico` = med_politico,
+         `Ambiente Regulatorio` = med_regulatorio,
+         `Ambiente de Negocios` = med_negocio) %>% 
+  gather(key = "Instituicoes",
+         value = "Índice de Qualidade Institucional",
+         c(`Ambiente Politico`,`Ambiente Regulatorio`,`Ambiente de Negocios`)) -> plot2 
+  
+ggplot(data = plot2,
+       aes(x=`Índice de Qualidade Institucional`, 
+             y=`Índice de percepção de Corrupção`,
+             colour = Grupo, 
+             shape = Grupo,
+             label = Pais))+
+  scale_y_continuous(breaks = seq(0,100,20))+
+  geom_point(size=2.5)+
+  # geom_label_repel(data = subset(rank, Pais =="Brazil"),
+  #                  box.padding = 0.35,
+  #                  point.padding = 0.5,
+  #                  segment.color = 'black')+
+  facet_grid(rows = vars(Instituicoes))+
+  theme_classic()+
+  labs(y="Índice de Percepção de Corrupção",x="Qualide Institucional")
+
+
+# Informações para as tabelas ---------------------------------------------
+
+rank[rank$Pais %in% nomes_top_10,c(1,3,7)]
+summary(rank[rank$Pais %in% nomes_top_10,c(3)])
+summary(rank[rank$Pais %in% nomes_top_10,c(2)])
+
+
+rank[rank$Pais %in% top_10_fronteira,c(1,7)]
+summary(rank[rank$Pais %in% top_10_fronteira,c(3)])
+summary(rank[rank$Pais %in% top_10_fronteira,c(2)])
+
+
+rank[rank$Pais %in% nomes_bottom_10,c(1,7)]
+summary(rank[rank$Pais %in% nomes_bottom_10,c(3)])
+summary(rank[rank$Pais %in% nomes_bottom_10,c(2)])
+
+
+rank[rank$Pais %in% bottom_10_fronteira,c(1,7)]
+summary(rank[rank$Pais %in% bottom_10_fronteira,c(3)])
+summary(rank[rank$Pais %in% bottom_10_fronteira,c(2)])
+
+
+
+# Plots pos-tcc -----------------------------------------------------------
+
+dados_tcc %>%
+  mutate(Ano = as.character(Ano)) %>% 
+  filter(Ano == "2017") %>%
+  ggplot(aes(x=ipc,y=ET, label = Pais))+
+  geom_point()+
+  geom_smooth(method = "lm", se=F)+
+  geom_label_repel(data = subset(dados_tcc[dados_tcc$Ano=="2017",], 
+                                 Pais %in% c(nomes_bottom_10,nomes_top_10)),
+                   box.padding = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'gray50')+
+  theme_classic()
+
+dados_tcc %>%
+  mutate(Ano = as.character(Ano)) %>% 
+  filter(Ano == "2017") %>%
+  ggplot(aes(x=regulatorio,y=ET, label = Pais))+
+  geom_point()+
+  geom_smooth(method = "lm", se=F)+
+  geom_label_repel(data = subset(dados_tcc[dados_tcc$Ano=="2017",], Pais %in% c(nomes_bottom_10,nomes_top_10)),
+                   box.padding = 0.35,
+                   point.padding = 0.5,
+                   segment.color = 'gray50')+
+  theme_classic()

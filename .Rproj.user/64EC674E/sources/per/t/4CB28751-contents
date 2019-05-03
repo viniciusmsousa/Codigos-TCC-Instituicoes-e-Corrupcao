@@ -1,0 +1,223 @@
+# Pacotes e Funções -------------------------------------------------------
+
+
+library(tibble)
+library(magrittr)
+library(tidyr)
+library(dplyr)
+library(forcats)
+library(stringr)
+filtro <- function(df){
+  # OBS: 
+  # Seleciona os paises que tem dados balanceados
+  # É necessário que a coluna com os paises tenha o nome de "Pais"
+  
+  lista_paises <- as.character(unique(df$Pais))
+  paises_completos <- vector(mode = "character",length = length(lista_paises))
+  
+  for(i in seq_along(lista_paises)){
+    pais_atual <- df %>% 
+      filter(Pais == lista_paises[i])
+    
+    if(any(is.na(pais_atual))==F){
+      paises_completos[i] <- lista_paises[i]
+    } else {
+      paises_completos[i] <- NA
+    }
+  }
+  dados <- df %>% 
+    filter(Pais %in% paises_completos)
+  return(dados)
+}
+
+
+library(plm)
+library(frontier)
+library(ggplot2)
+library(ggthemes)
+
+
+
+
+# Montando base de dados --------------------------------------------------
+
+## global index of innovtation (institutions)
+gii <- read.csv(file = "Dados_depois_tcc/ObservationData_pxngfqd.csv",
+                header = T,
+                sep = ",") %>% 
+  as_tibble() %>% 
+  select(-c(Unit, measure)) %>% 
+  mutate(Date = as.factor(Date)) %>% 
+  rename(Pais = country) %>% 
+  mutate(indicator = as.character(indicator)) %>% 
+  filter(indicator %in% c("Business environment",
+                        "Political environment",
+                        "Regulatory environment",
+                        "Market sophistication",
+                        "Business sophistication")) %>% 
+  spread(key = indicator,
+         value = Value) %>% 
+  mutate(Pais = str_replace_all(string = .$Pais,
+                                pattern = "United States of America",
+                                replacement = "United States")) %>% 
+  filtro()
+
+
+## corruption peception index
+read.csv(file = "Dados_depois_tcc/ObservationData_lwsoqxg.csv",
+         header = T,
+         sep = ",") %>% 
+  as_tibble() %>% 
+  select(country,Date, Value) %>% 
+  rename(Pais = country,
+         ipc = Value) %>% 
+  mutate(Date = as.factor(Date)) %>% 
+  filtro() -> cpi
+
+
+## human development index
+read.csv(file = "Dados_depois_tcc/idh.csv",
+         header = T,
+         sep = ";") %>%
+  as_tibble() %>%
+  select(-c(dimension,indicator_id, indicator_name)) %>%
+  rename(Pais = country_name,
+         `2013` = X2013,
+         `2014` = X2014,
+         `2015` = X2015,
+         `2016` = X2016,
+         `2017` = X2017,
+         `2018` = X9999) %>%
+  gather(key = "Date",value = "hdi", -c(iso3,Pais)) %>% 
+  mutate(Date = as.factor(Date)) %>%
+  filtro()-> idh
+
+
+## press freedom
+press_freedom[str_detect(string = press_freedom$Pais,pattern = "United St"),"Pais"] # United States of America
+
+read.csv(file = "Dados_depois_tcc/ObservationData_qrygkce.csv",
+         header = T,
+         sep = ",") %>% 
+  as_tibble() %>% 
+  select(c(country,Date,Value)) %>% 
+  mutate(Date = as.factor(Date)) %>% 
+  rename(Pais = country,
+         press_freedom = Value) %>% 
+  filtro() %>% 
+  mutate(Pais = str_replace_all(string = .$Pais,
+                                pattern = "United States of America",
+                                replacement = "United States")) -> press_freedom
+
+
+## juntando dados
+press_freedom %>% 
+  inner_join(cpi,
+             by = c("Pais","Date")) %>% 
+  inner_join(gii,
+             by = c("Pais","Date")) %>% 
+  inner_join(idh,
+             by = c("Pais","Date")) %>%
+  mutate(Date = as.integer(Date)) %>%
+  rename(Country = Pais,
+         Year = Date,
+         PF = press_freedom,
+         cpi = ipc,
+         Business_Env = `Business environment`,
+         Political_Env = `Political environment`,
+         Regulatory_Env = `Regulatory environment`,
+         Market_sph = `Market sophistication`,
+         Business_sph = `Business sophistication`) -> dados
+rm(list=setdiff(ls(), "dados"))
+gc()
+
+## salvando csv
+# write.csv(x = dados,
+#           file = "Dados_depois_tcc/data_set.csv",
+#           row.names = F)
+
+
+
+# Estimando Fronteira e ET ------------------------------------------------
+
+dados <- read.csv("Dados_depois_tcc/data_set.csv",
+                  header = T, sep =",") %>% 
+  as_tibble()
+dados_fronteira <- plm::pdata.frame(dados,
+                                    c("Country","Year"))
+
+# Error Components Frontier (Battese & Coelli 1992)
+# with time-variant efficiencies
+frontier_model <- frontier::sfa(log(cpi) ~ log(Political_Env) + 
+                                  log(Regulatory_Env) + log(Business_Env) + 
+                                  log(hdi) + log(PF) + log(Business_sph)+
+                                  log(Market_sph),
+                                timeEffect = TRUE,
+                                truncNorm = T,
+                                data = dados_fronteira)
+sumario_fronteira <- summary(frontier_model)
+
+# juntando eficiencia técnica com os dados
+paises <- summary(frontier_model,
+                  effic = T)$effic %>% 
+  rownames()
+efic_tecnica <- summary(frontier_model)$effic %>% 
+  as_tibble() %>% 
+  mutate(sigla = paises) %>% 
+  gather(key = "Ano",
+         value = "ET",
+         -c(sigla)) %>%
+  inner_join(dados_fronteira,
+             by = c("sigla" = "Country","Ano" = "Year")) %>% 
+  mutate(Ano = if_else(Ano == "1",
+                        true = 2013,
+                        false = if_else(Ano == "2",
+                                        true = 2014,
+                                        false = if_else(Ano == "3",
+                                                        true = 2015,
+                                                        false = if_else(Ano == "4",
+                                                                        true = 2016,
+                                                                        false = if_else(Ano == "5",
+                                                                                        true = 2017,
+                                                                                        false = 2018)))))) %>% 
+  rename(Country = sigla,
+         Year = Ano,
+         TE = ET,
+         CPI = cpi)
+
+rm(list=setdiff(ls(), "efic_tecnica"))
+gc()
+
+
+# salvando o data set
+# write.csv(x = efic_tecnica,
+#           file = paste0(getwd(),"/Dados_depois_tcc/dados_com_ET.csv"),
+#           row.names = F)
+
+# Analise dos resultados --------------------------------------------------
+
+dados_com_ET <- read.csv(file = paste0(getwd(),"/Dados_depois_tcc/dados_com_ET.csv"),
+                         header = T,
+                         sep = ",") %>% 
+  as_tibble()
+
+
+
+# rascunho ----------------------------------------------------------------
+
+# distribuição de todasas variáveis
+library(ggridges)
+dados_com_ET %>%
+  mutate(hdi = 100*hdi,
+         TE = 100*TE,) %>% 
+  gather(key = "Variable",
+         value = "Index",
+         -c(Country,Year, iso3)) %>% 
+  mutate(Variable = as_factor(Variable),
+         Variable = forcats::fct_reorder(Variable, Index, median)) %>% 
+  ggplot(aes(x = Index, y = Variable)) +
+  geom_density_ridges_gradient(fill = "lightblue") +
+  #  geom_vline(xintercept = sent_medio_geral, linetype = "dashed") +
+  theme_minimal() +
+  labs(x = "Índice", y = NULL,
+       title = "Distribuição dos Índices")

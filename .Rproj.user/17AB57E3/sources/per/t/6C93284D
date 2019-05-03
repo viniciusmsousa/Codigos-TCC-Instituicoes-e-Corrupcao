@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1555460395739.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "369808160",
+    "id" : "6C93284D",
+    "lastKnownWriteTime" : 1555460480,
+    "last_content_update" : 1555460480255,
+    "path" : "D:/Vinicius/Projetos_vini/TCC - Vinicius M Sousa - Fronteira Estocástica/montando_base_dados.R",
+    "project_path" : "montando_base_dados.R",
+    "properties" : {
+        "cursorPosition" : "11,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 1,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -1,0 +1,28 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1554584452899.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "0|20|40|0|\n9|23|30|0|\n41|25|139|0|\n140|27|195|0|\n196|25|204|0|\n205|11|222|42|\n",
+    "hash" : "2436909277",
+    "id" : "4CB28751",
+    "lastKnownWriteTime" : 1555096907,
+    "last_content_update" : 1555097138018,
+    "path" : "~/Economia/TCC/TCC - Vinicius M Sousa - Fronteira Estocástica/depois_do_tcc.R",
+    "project_path" : "depois_do_tcc.R",
+    "properties" : {
+        "cursorPosition" : "222,42",
+        "docOutlineSize" : "158.54116239208912",
+        "docOutlineVisible" : "1",
+        "scrollLine" : "0",
+        "tempName" : "Untitled1"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}
